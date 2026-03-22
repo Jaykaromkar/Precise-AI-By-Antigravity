@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precise AI - Premium Financial Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488'
+                        }
+                    },
+                    animation: {
+                        'blob': 'blob 10s infinite alternate',
+                        'fade-in': 'fadeIn 1.2s ease-out forwards',
+                        'slide-up': 'slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%': { transform: 'translateY(0px) scale(1)', opacity: '0.4' },
+                            '100%': { transform: 'translateY(-50px) scale(1.1)', opacity: '0.8' }
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(40px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 40px 60px -15px rgba(0, 0, 0, 0.5);
+        }
+        .text-glow { text-shadow: 0 0 40px rgba(45, 212, 191, 0.3); }
+        .input-glass {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        .input-glass:focus {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(45, 212, 191, 0.5);
+            box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-[#020617] text-gray-100 min-h-screen selection:bg-brand-500/30 overflow-x-hidden relative flex flex-col">
+
+    <!-- Ambient Animated Background (Cleaned up to prevent overlapping bugs) -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div class="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-brand-600/10 rounded-full mix-blend-screen filter blur-[150px] animate-blob"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-blue-600/10 rounded-full mix-blend-screen filter blur-[150px] animate-blob" style="animation-duration: 15s; animation-direction: alternate-reverse;"></div>
+        <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPgo8cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDIiLz4KPHBhdGggZD0iTTAgMEg4VjhIMHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzIyMiIgc3Ryb2tlLW9wYWNpdHk9IjAuNSIgc3Ryb2tlLXdpZHRoPSIxIi8+Cjwvc3ZnPg==')] opacity-40"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="relative z-50 w-full bg-[#020617]/50 backdrop-blur-2xl border-b border-white/5 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-6 lg:px-12 h-24 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-400 to-blue-600 flex items-center justify-center shadow-[0_0_20px_rgba(45,212,191,0.2)] text-white border border-white/10">
+                    <i data-lucide="layers" class="w-6 h-6"></i>
+                </div>
+                <span class="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent tracking-tight">Precise AI</span>
+            </div>
+            <div class="flex gap-6 items-center">
+                <button onclick="document.getElementById('authModal').classList.remove('hidden')" class="px-6 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors">Sign In</button>
+                <button onclick="document.getElementById('authModal').classList.remove('hidden')" class="px-8 py-3.5 text-sm font-bold bg-white text-black rounded-xl hover:bg-gray-200 transition-all active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.15)] flex items-center gap-2">
+                    Get Started <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Super Spacious Hero Section -->
+    <main class="relative z-10 w-full flex-1 flex flex-col justify-center py-20 lg:py-32">
+        <div class="max-w-7xl mx-auto px-6 lg:px-12 w-full grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-24 items-center">
+            
+            <!-- Hero Text (Left Col) -->
+            <div class="lg:col-span-6 flex flex-col items-start justify-center h-full">
+                <div class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-sm font-medium text-brand-300 mb-10 animate-slide-up">
+                    <span class="w-2.5 h-2.5 rounded-full bg-brand-400 animate-pulse"></span>
+                    FinSight Engine v2.0 Live
+                </div>
+                
+                <h1 class="text-6xl lg:text-[5.5rem] font-extrabold tracking-tight mb-10 animate-slide-up text-glow leading-[1.1]" style="animation-delay: 0.1s;">
+                    Clarity,<br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 via-blue-400 to-indigo-400">computed instantly.</span>
+                </h1>
+                
+                <p class="text-xl lg:text-2xl text-gray-400 max-w-2xl mb-14 animate-slide-up leading-relaxed" style="animation-delay: 0.2s;">
+                    Upload decades of earnings reports and ledgers. Precise AI uses Local Vector Search and RAG to instantly extract and beautifully visualize actionable financial intelligence.
+                </p>
+
+                <div class="flex flex-col sm:flex-row gap-6 animate-slide-up w-full sm:w-auto" style="animation-delay: 0.3s;">
+                    <button onclick="document.getElementById('authModal').classList.remove('hidden')" class="px-10 py-5 rounded-2xl bg-gradient-to-r from-brand-500 to-blue-600 text-white font-bold text-lg hover:opacity-90 transition-all flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(20,184,166,0.3)] active:scale-95 group">
+                        Launch Dashboard <i data-lucide="chevron-right" class="w-6 h-6 group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Clean, spacious Hero Visuals (Right Col) -->
+            <div class="lg:col-span-6 w-full animate-fade-in" style="animation-delay: 0.5s;">
+                <div class="w-full glass-panel rounded-3xl p-8 lg:p-10 relative">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-6 mb-8">
+                        <div class="flex items-center gap-4">
+                            <div class="flex gap-2">
+                                <div class="w-3.5 h-3.5 rounded-full bg-red-500"></div>
+                                <div class="w-3.5 h-3.5 rounded-full bg-yellow-500"></div>
+                                <div class="w-3.5 h-3.5 rounded-full bg-green-500"></div>
+                            </div>
+                            <span class="text-base font-medium text-gray-300">Q4_Financial_Analysis.csv</span>
+                        </div>
+                    </div>
+                    
+                    <div class="h-[350px] lg:h-[450px] w-full relative">
+                        <canvas id="heroChartMain"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </main>
+
+    <!-- Super Spacious Features Section -->
+    <section id="features" class="relative z-10 py-32 bg-black/40 border-y border-white/5">
+        <div class="max-w-7xl mx-auto px-6 lg:px-12">
+            <div class="text-center max-w-3xl mx-auto mb-24">
+                <h2 class="text-4xl md:text-5xl font-bold mb-6">Unmatched Analytical Power</h2>
+                <p class="text-gray-400 text-xl leading-relaxed">A completely local, zero-budget infrastructure tailored entirely for precision finance.</p>
+            </div>
+
+            <div class="grid lg:grid-cols-3 gap-10">
+                <!-- Feature 1 -->
+                <div class="glass-panel p-12 rounded-3xl transition-all duration-300 hover:-translate-y-2 hover:border-blue-500/30">
+                    <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 mb-8">
+                        <i data-lucide="database" class="w-8 h-8 text-blue-400"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-4">Persistent Vector Search</h3>
+                    <p class="text-gray-400 text-lg leading-relaxed">Embeds local documents securely into a state-of-the-art ChromaDB knowledge graph for instant recall without limits.</p>
+                </div>
+                
+                <!-- Feature 2 -->
+                <div class="glass-panel p-12 rounded-3xl transition-all duration-300 hover:-translate-y-2 hover:border-brand-500/30">
+                    <div class="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center border border-brand-500/20 mb-8">
+                        <i data-lucide="shield-check" class="w-8 h-8 text-brand-400"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-4">Automatic PII Masking</h3>
+                    <p class="text-gray-400 text-lg leading-relaxed">Military-grade regex scanning anonymizes emails, phones, and precise capital amounts before interacting with any LLM.</p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="glass-panel p-12 rounded-3xl transition-all duration-300 hover:-translate-y-2 hover:border-purple-500/30">
+                    <div class="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 mb-8">
+                        <i data-lucide="bar-chart-2" class="w-8 h-8 text-purple-400"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-4">Dynamic Chart Generation</h3>
+                    <p class="text-gray-400 text-lg leading-relaxed">Request visual trends natively in chat, and the AI autonomously processes CSV streams to render beautiful graphical displays.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Super Spacious Auth Modal Overlay -->
+    <div id="authModal" class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center hidden opacity-0 transition-opacity duration-300 overflow-y-auto p-4 md:p-10">
+        
+        <div class="bg-[#0b1121] rounded-[2rem] border border-white/10 w-full max-w-lg shadow-[0_0_150px_rgba(20,184,166,0.1)] transform scale-95 transition-transform duration-300 relative z-10 my-auto" id="authModalContent">
+            
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-brand-400 to-blue-500 rounded-t-[2rem]"></div>
+
+            <button onclick="closeAuthModal()" class="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors bg-white/5 rounded-full p-2 hover:bg-white/10">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+
+            <!-- Spaced Header -->
+            <div class="pt-16 pb-8 px-12 text-center" id="authHeaderBlock">
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-brand-500 to-blue-600 flex items-center justify-center shadow-lg shadow-brand-500/30 text-white mb-6">
+                    <i data-lucide="lock" class="w-8 h-8"></i>
+                </div>
+                <h2 id="authTitle" class="text-3xl font-extrabold text-white tracking-tight mb-2">Access Platform</h2>
+                <p class="text-base text-gray-400" id="authSubtitle">Enter your secure credentials</p>
+            </div>
+
+            <!-- Spacious Tabs -->
+            <div class="flex mx-12 bg-black/40 p-1.5 rounded-2xl mb-10 border border-white/5" id="authTabsContainer">
+                <button id="tabLogin" onclick="switchTab('login')" class="flex-1 py-3.5 text-base font-bold rounded-xl bg-gray-800 text-white shadow transition-all">Sign In</button>
+                <button id="tabRegister" onclick="switchTab('register')" class="flex-1 py-3.5 text-base font-bold rounded-xl text-gray-400 hover:text-gray-200 transition-all transparent bg-transparent">Create Account</button>
+            </div>
+
+            <!-- Extra padding form -->
+            <div class="px-12 pb-14">
+                <form id="authForm" class="space-y-8">
+                    
+                    <div id="emailFieldContainer" class="hidden">
+                        <label class="block text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">Professional Email</label>
+                        <div class="relative group">
+                            <i data-lucide="mail" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-brand-400 transition-colors"></i>
+                            <input type="email" id="email" class="w-full input-glass rounded-2xl py-4 pl-12 pr-5 text-white placeholder-gray-600 outline-none text-lg" placeholder="analyst@domain.com">
+                        </div>
+                    </div>
+
+                    <div id="usernameFieldContainer">
+                        <label class="block text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">Username ID</label>
+                        <div class="relative group">
+                            <i data-lucide="user" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-brand-400 transition-colors"></i>
+                            <input type="text" id="username" class="w-full input-glass rounded-2xl py-4 pl-12 pr-5 text-white placeholder-gray-600 outline-none text-lg" placeholder="analyst_omega">
+                        </div>
+                    </div>
+
+                    <div id="passwordFieldContainer">
+                        <div class="flex justify-between items-center mb-3">
+                            <label class="block text-sm font-bold text-gray-400 uppercase tracking-wider">Secure Password</label>
+                            <button type="button" onclick="switchTab('forgot')" id="forgotPasswordLink" class="text-sm text-brand-400 hover:text-brand-300 font-bold">Forgot Password?</button>
+                        </div>
+                        <div class="relative group">
+                            <i data-lucide="shield" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-brand-400 transition-colors"></i>
+                            <input type="password" id="password" class="w-full input-glass rounded-2xl py-4 pl-12 pr-5 text-white placeholder-gray-600 outline-none text-lg" placeholder="••••••••••••">
+                        </div>
+                    </div>
+                    
+                    <div id="authError" class="text-red-400 text-sm text-center hidden p-4 bg-red-500/10 rounded-xl border border-red-500/20 font-bold tracking-wide"></div>
+                    <div id="authSuccess" class="text-brand-400 text-sm text-center hidden p-4 bg-brand-500/10 rounded-xl border border-brand-500/20 font-bold tracking-wide"></div>
+
+                    <button type="submit" id="authSubmitBtn" class="w-full bg-gradient-to-r from-brand-500 to-blue-600 hover:opacity-90 text-white font-bold rounded-2xl py-4 mt-6 transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(20,184,166,0.3)] flex items-center justify-center gap-2 text-lg">
+                        <span>Authenticate</span> <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </button>
+                    
+                    <div id="backToLoginContainer" class="text-center hidden pt-4">
+                        <button type="button" onclick="switchTab('login')" class="text-sm font-semibold text-gray-400 hover:text-white transition-colors">Return to Login</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Re-use the landing.js for logic -->
+    <script src="/js/landing.js"></script>
+    <script>
+        lucide.createIcons();
+
+        // Initialize Hero Chart with simplified transparent aesthetic
+        Chart.defaults.color = '#9ca3af';
+        Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+        Chart.defaults.font.size = 14;
+        
+        const ctx = document.getElementById('heroChartMain');
+        if (ctx) {
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
+                    datasets: [
+                        {
+                            label: 'Revenue Grw',
+                            data: [650, 720, 810, 850, 920, 990, 1050, 1120, 1250, 1400],
+                            borderColor: '#2dd4bf', 
+                            backgroundColor: 'rgba(45, 212, 191, 0.05)',
+                            borderWidth: 4,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#2dd4bf',
+                            pointHoverBackgroundColor: '#2dd4bf',
+                            pointRadius: 5,
+                            pointHoverRadius: 8
+                        },
+                        {
+                            label: 'Proj Opex',
+                            data: [500, 520, 530, 550, 580, 590, 610, 630, 640, 660],
+                            borderColor: '#3b82f6', 
+                            borderWidth: 3,
+                            borderDash: [8, 6],
+                            tension: 0.4,
+                            fill: false,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#fff',
+                            bodyColor: '#e5e7eb',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 16,
+                            titleFont: { size: 16, weight: 'bold' },
+                            bodyFont: { size: 14 }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false, drawBorder: false },
+                            ticks: { maxTicksLimit: 6, padding: 10 }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+                            ticks: { callback: (value) => '$' + value + 'k', padding: 10 }
+                        }
+                    },
+                    interaction: { mode: 'index', intersect: false }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

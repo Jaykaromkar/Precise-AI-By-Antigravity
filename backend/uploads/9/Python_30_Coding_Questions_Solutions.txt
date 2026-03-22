@@ -1,0 +1,266 @@
+
+=====================
+✅ Easy Level (Q1–Q10)
+=====================
+
+1. Palindrome Check
+--------------------
+def is_palindrome(s):
+    cleaned = ''.join(c.lower() for c in s if c.isalnum())
+    return cleaned == cleaned[::-1]
+
+2. Factorial of a Number
+-------------------------
+def factorial(n):
+    result = 1
+    for i in range(2, n+1):
+        result *= i
+    return result
+
+3. Sum of Digits of a Number
+-----------------------------
+def sum_of_digits(n):
+    return sum(int(d) for d in str(n))
+
+4. Reverse a String Without Using [::-1]
+-----------------------------------------
+def reverse_string(s):
+    result = ''
+    for char in s:
+        result = char + result
+    return result
+
+5. Fibonacci Series (First N Terms)
+------------------------------------
+def fibonacci(n):
+    a, b = 0, 1
+    for _ in range(n):
+        print(a, end=' ')
+        a, b = b, a + b
+
+6. Check if a Number is Prime
+------------------------------
+def is_prime(n):
+    if n <= 1: return False
+    for i in range(2, int(n**0.5)+1):
+        if n % i == 0: return False
+    return True
+
+7. Right Triangle Star Pattern
+-------------------------------
+def print_pattern(n):
+    for i in range(1, n+1):
+        print('*' * i)
+
+8. Count Vowels and Consonants
+-------------------------------
+def count_vowels_consonants(s):
+    vowels = 'aeiouAEIOU'
+    v = sum(1 for c in s if c in vowels)
+    c = sum(1 for c in s if c.isalpha() and c not in vowels)
+    return v, c
+
+9. GCD and LCM of Two Numbers
+------------------------------
+import math
+def gcd_lcm(a, b):
+    gcd = math.gcd(a, b)
+    lcm = abs(a*b) // gcd
+    return gcd, lcm
+
+10. Check Armstrong Number
+---------------------------
+def is_armstrong(n):
+    digits = [int(d) for d in str(n)]
+    return n == sum(d**len(digits) for d in digits)
+
+
+============================
+✅ Medium Level (Q11–Q20)
+============================
+
+11. Second Largest Element
+---------------------------
+def second_largest(lst):
+    first = second = float('-inf')
+    for num in lst:
+        if num > first:
+            second, first = first, num
+        elif first > num > second:
+            second = num
+    return second
+
+12. Remove Duplicates Without Set
+----------------------------------
+def remove_duplicates(lst):
+    seen, result = set(), []
+    for item in lst:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+13. Word Frequency in String
+-----------------------------
+from collections import Counter
+def word_frequency(s):
+    return Counter(s.split())
+
+14. Merge Two Sorted Lists
+---------------------------
+def merge_sorted(a, b):
+    result = []
+    i = j = 0
+    while i < len(a) and j < len(b):
+        if a[i] < b[j]:
+            result.append(a[i])
+            i += 1
+        else:
+            result.append(b[j])
+            j += 1
+    result.extend(a[i:] or b[j:])
+    return result
+
+15. Check Anagrams
+-------------------
+from collections import Counter
+def are_anagrams(a, b):
+    return Counter(a) == Counter(b)
+
+16. All Pairs with Given Sum
+-----------------------------
+def find_pairs(arr, target):
+    seen = {}
+    pairs = []
+    for num in arr:
+        if target - num in seen:
+            pairs.append((target - num, num))
+        seen[num] = True
+    return pairs
+
+17. Check List Palindrome
+--------------------------
+def is_list_palindrome(lst):
+    return lst == lst[::-1]
+
+18. Sum Series: 1 + 11 + 111 ...
+---------------------------------
+def series_sum(n):
+    total, term = 0, 0
+    for _ in range(n):
+        term = term * 10 + 1
+        total += term
+    return total
+
+19. Missing Number in 1 to N
+-----------------------------
+def find_missing(lst, n):
+    return (n*(n+1))//2 - sum(lst)
+
+20. Sort List Without sort()
+-----------------------------
+def sort_list(lst):
+    for i in range(len(lst)):
+        for j in range(i+1, len(lst)):
+            if lst[i] > lst[j]:
+                lst[i], lst[j] = lst[j], lst[i]
+    return lst
+
+
+===========================
+✅ Hard Level (Q21–Q30)
+===========================
+
+21. Rotate Matrix 90 Degrees
+-----------------------------
+def rotate_matrix(mat):
+    return [list(row)[::-1] for row in zip(*mat)]
+
+22. First Non-Repeating Character
+----------------------------------
+from collections import Counter
+def first_non_repeating(s):
+    freq = Counter(s)
+    for c in s:
+        if freq[c] == 1:
+            return c
+    return None
+
+23. Longest Word in Sentence
+-----------------------------
+def longest_word(s):
+    words = s.split()
+    return max(words, key=len)
+
+24. Substring Occurrence Count
+-------------------------------
+def count_substring(s, sub):
+    return s.count(sub)
+
+25. Binary Search in Sorted List
+---------------------------------
+def binary_search(arr, target):
+    low, high = 0, len(arr)-1
+    while low <= high:
+        mid = (low + high) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return -1
+
+26. Bubble Sort
+----------------
+def bubble_sort(lst):
+    n = len(lst)
+    for i in range(n):
+        for j in range(0, n-i-1):
+            if lst[j] > lst[j+1]:
+                lst[j], lst[j+1] = lst[j+1], lst[j]
+    return lst
+
+27. Balanced Parentheses Using Stack
+-------------------------------------
+def is_balanced(expr):
+    stack = []
+    for char in expr:
+        if char in '([{':
+            stack.append(char)
+        elif char in ')]}':
+            if not stack or '([{'.index(stack.pop()) != ')]}'.index(char):
+                return False
+    return not stack
+
+28. Majority Element (> n/2 times)
+-----------------------------------
+def majority_element(nums):
+    count, candidate = 0, None
+    for num in nums:
+        if count == 0:
+            candidate = num
+        count += (1 if num == candidate else -1)
+    return candidate if nums.count(candidate) > len(nums)//2 else None
+
+29. Longest Palindromic Substring
+----------------------------------
+def longest_palindrome(s):
+    n = len(s)
+    result = ""
+    for i in range(n):
+        for j in range(i, n):
+            sub = s[i:j+1]
+            if sub == sub[::-1] and len(sub) > len(result):
+                result = sub
+    return result
+
+30. Max Sum Subarray of Size K (Sliding Window)
+------------------------------------------------
+def max_sum_subarray(arr, k):
+    max_sum = sum(arr[:k])
+    current_sum = max_sum
+    for i in range(k, len(arr)):
+        current_sum += arr[i] - arr[i-k]
+        max_sum = max(max_sum, current_sum)
+    return max_sum
