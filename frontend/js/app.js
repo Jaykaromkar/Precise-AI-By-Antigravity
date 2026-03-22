@@ -969,12 +969,11 @@ function renderVisualizations(jsonSchema) {
 }
 
 window.switchDrawerTab = function(tab) {
-    // Map tab names to their actual DOM IDs
     const tabMap = {
-        'files': { btnId: 'tabFiles', contentId: 'filesContent' },
-        'preview': { btnId: 'tabPreview', contentId: 'previewContent' },
+        'files':          { btnId: 'tabFiles',          contentId: 'filesContent' },
+        'preview':        { btnId: 'tabPreview',        contentId: 'previewContent' },
         'visualizations': { btnId: 'tabVisualizations', contentId: 'visualizationsContent' },
-        'audit': { btnId: 'tabAudit', contentId: 'auditContent' }
+        'audit':          { btnId: 'tabAudit',          contentId: 'auditContent' }
     };
     
     Object.entries(tabMap).forEach(([t, ids]) => {
@@ -986,11 +985,14 @@ window.switchDrawerTab = function(tab) {
             btn.classList.remove('text-gray-500', 'font-medium', 'border-transparent');
             btn.classList.add('text-blue-400', 'font-bold', 'border-blue-400');
             content.classList.remove('hidden');
-            content.classList.add('flex');
+            // Remove audit badge when user opens audit tab
+            if (t === 'audit') {
+                const badge = btn.querySelector('.audit-badge');
+                if (badge) badge.remove();
+            }
         } else {
             btn.classList.remove('text-blue-400', 'font-bold', 'border-blue-400');
             btn.classList.add('text-gray-500', 'font-medium', 'border-transparent');
-            content.classList.remove('flex');
             content.classList.add('hidden');
         }
     });

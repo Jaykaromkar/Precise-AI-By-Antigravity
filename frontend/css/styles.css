@@ -94,3 +94,23 @@ body {
     padding: 1rem;
     margin: 1rem 0;
 }
+
+/* Drawer Tab Content panes — display as flex-column when not hidden */
+#filesContent:not(.hidden),
+#previewContent:not(.hidden),
+#visualizationsContent:not(.hidden),
+#auditContent:not(.hidden) {
+    display: flex !important;
+    flex-direction: column;
+}
+
+/* Audit log entry fade-in animation */
+#auditContainer > div {
+    animation: auditFadeIn 0.3s ease forwards;
+}
+
+@keyframes auditFadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
