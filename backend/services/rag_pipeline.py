@@ -19,7 +19,7 @@ vector_store = Chroma(
 async def stream_rag_response(query: str, chat_history: list, session_id: int):
     # Search ChromaDB
     try:
-        retriever = vector_store.as_retriever(search_kwargs={"k": 4, "filter": {"session_id": session_id}})
+        retriever = vector_store.as_retriever(search_kwargs={"k": 12, "filter": {"session_id": session_id}})
         docs = retriever.invoke(query)
     except Exception as e:
         print(f"ChromaDB retrieval error: {e}")
@@ -47,12 +47,20 @@ async def stream_rag_response(query: str, chat_history: list, session_id: int):
         "If the user asks for data visualization or charts or current context contains numerical historical tabular data that should be charted, "
         "output a JSON code block with Chart.js compatible data at the *very end* of your response.\n"
         "Format chart block strictly like this:\n```json\n{\"type\": \"bar\", \"data\": {\"labels\": [\"A\"], \"datasets\": [{\"label\": \"value\", \"data\": [1]}]}}\n```\n"
+        "IMPORTANT: The context provided is heavily masked with privacy tokens (e.g. [MONEY_1], [CARDINAL_2]).\n"
+        "To perform ANY calculations, aggregations, or specific references, check the exact raw values for each token in the 'DECRYPTION KEY' below:\n"
+        f"DECRYPTION KEY: {json.dumps(vault.mapping)}\n\n"
+        "Do NOT invent your own tokens. Use only the exact tokens provided in Context or output plain values if doing calculations.\n"
         f"Context provided:\n{masked_context}"
     )
 
     messages = [{"role": "system", "content": system_prompt}]
+    import re
     for msg in chat_history[-5:]: # Keep last 5 messages for context
-        masked_historic = vault.mask(msg.content)
+        # Strip the UI-injected highlight spans before passing back to LLM context
+        clean_content = re.sub(r'<span[^>]*>', '', msg.content)
+        clean_content = clean_content.replace('</span>', '')
+        masked_historic = vault.mask(clean_content)
         messages.append({"role": msg.role, "content": masked_historic})
         
     masked_query = vault.mask(query)

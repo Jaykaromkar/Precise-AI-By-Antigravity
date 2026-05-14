@@ -137,13 +137,26 @@ async def execute_llm_prompt(prompt: str) -> str:
 
 async def generate_document_report(document_id: int, raw_text: str, filename: str, user_email: str = None, username: str = None):
     # Truncate text if it's too massive for standard context windows (just for safety in PoC)
-    text_sample = raw_text[:20000] 
+    # Truncate text to save on token quota (especially for on-demand tiers)
+    text_sample = raw_text[:8000] 
 
     try:
-        # 1. Update DB Status to EXTRACTING
+        # 1. Update DB Status to EXTRACTING (Upsert Pattern)
         db = SessionLocal()
-        report = DocumentReport(document_id=document_id, status="EXTRACTING", progress_message="Extracting core context boundaries...")
-        db.add(report)
+        report = db.query(DocumentReport).filter(DocumentReport.document_id == document_id).first()
+        
+        if not report:
+            report = DocumentReport(
+                document_id=document_id, 
+                status="EXTRACTING", 
+                progress_message="Extracting core context boundaries..."
+            )
+            db.add(report)
+        else:
+            report.status = "EXTRACTING"
+            report.progress_message = "Extracting core context boundaries..."
+            report.updated_at = datetime.utcnow()
+            
         db.commit()
         db.refresh(report)
         

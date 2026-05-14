@@ -40,12 +40,15 @@ async def chat_stream_get(request: Request, session_id: int, query: str, db: Ses
 
     async def event_generator():
         full_response = ""
+        pii_mapping = {}
         try:
             async for item in stream_rag_response(query, history, session_id):
                 if await request.is_disconnected():
                     break
                 if isinstance(item, dict):
                     if item.get("type") == "audit":
+                        if "mapping" in item['data']:
+                            pii_mapping = item['data']['mapping']
                         yield {
                             "event": "audit",
                             "data": json.dumps(item['data'])
@@ -74,6 +77,34 @@ async def chat_stream_get(request: Request, session_id: int, query: str, db: Ses
             }
         finally:
             if full_response:
+                import re
+                
+                parts = re.split(r'(```json.*?```)', full_response, flags=re.DOTALL)
+                for i, part in enumerate(parts):
+                    if part.startswith('```json'):
+                        for tag, real_val in pii_mapping.items():
+                            core_tag = tag.replace('[', '').replace(']', '')
+                            numeric_val = "".join([c for c in str(real_val) if c.isdigit() or c == '.'])
+                            if not numeric_val: numeric_val = "0"
+                            part = part.replace(tag, numeric_val)
+                            part = re.sub(rf'\b{re.escape(core_tag)}\b', numeric_val, part)
+                        part = re.sub(r'\[(?:MONEY|CARDINAL|PERCENT|DATE|NAME|EMAIL|PHONE)_\d+\]', '0', part)
+                        parts[i] = part
+                    else:
+                        for tag, real_val in pii_mapping.items():
+                            span_html = f'<span class="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1 rounded text-[0.9em]" title="Securely restored from database">{real_val}</span>'
+                            part = part.replace(tag, span_html)
+                            
+                            core_tag = tag.replace('[', '').replace(']', '')
+                            numeric_val = "".join([c for c in str(real_val) if c.isdigit() or c == '.'])
+                            if not numeric_val: numeric_val = "0"
+                            part = re.sub(rf'\b{re.escape(core_tag)}\b', numeric_val, part)
+                        part = re.sub(r'\[(?:MONEY|CARDINAL|PERCENT|DATE|NAME|EMAIL|PHONE)_\d+\]\s*=\s*', '', part)
+                        part = re.sub(r'\s*\[(?:MONEY|CARDINAL|PERCENT|DATE|NAME|EMAIL|PHONE)_\d+\]', '', part)
+                        parts[i] = part
+                
+                full_response = "".join(parts)
+
                 from core.database import SessionLocal
                 with SessionLocal() as final_db:
                     assistant_msg = ChatMessage(session_id=session_id, role="assistant", content=full_response)

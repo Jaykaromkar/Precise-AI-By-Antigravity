@@ -10,6 +10,7 @@ let currentSessionId = null;
 let isStreaming = false;
 let messageHistory = [];
 let chartInstances = {};
+let currentPiiMapping = {};
 
 // DOM Elements
 const sessionList = document.getElementById('sessionList');
@@ -57,18 +58,18 @@ async function init() {
     if (!currentSessionId) {
         await createNewSession();
     }
-    
+
     // Fetch and display active AI Provider
     try {
         const res = await fetch(`${API_BASE}/chat/provider`);
-        if(res.ok) {
+        if (res.ok) {
             const data = await res.json();
             const badge = document.getElementById('providerName');
             if (badge) badge.textContent = `${data.provider}`;
             // Optional: You can also show the model if requested
             // if (badge) badge.textContent = `${data.provider} (${data.model})`;
         }
-    } catch(e) {
+    } catch (e) {
         console.error("Failed to load provider config", e);
     }
 }
@@ -125,38 +126,43 @@ async function fetchSessions() {
 }
 
 function resetKnowledgeBaseUI() {
-    const auditContent = document.getElementById('auditContent');
-    if (auditContent) auditContent.innerHTML = '';
-    
+    const auditContainer = document.getElementById('auditContainer');
+    if (auditContainer) auditContainer.innerHTML = `
+        <div class="text-center opacity-50 px-6 mt-10" id="auditEmptyState">
+            <i data-lucide="shield" class="w-12 h-12 text-gray-500 mx-auto mb-3"></i>
+            <p class="text-sm">Ask the agent a question to actively monitor the Context Extraction and PII Masking trail here.</p>
+        </div>
+    `;
+
     const vizContainer = document.getElementById('vizContainer');
     if (vizContainer) vizContainer.innerHTML = '';
-    
+
     const vizEmptyState = document.getElementById('vizEmptyState');
     if (vizEmptyState) {
         vizEmptyState.classList.remove('hidden');
         vizEmptyState.innerHTML = '<i data-lucide="pie-chart" class="w-12 h-12 text-gray-500 mx-auto mb-3"></i><p class="text-sm">Upload a ledger to generate interactive Chart.js modules automatically.</p>';
     }
-    
+
     const docPreviewFrame = document.getElementById('docPreviewFrame');
     if (docPreviewFrame) {
         docPreviewFrame.src = '';
         docPreviewFrame.classList.add('hidden');
     }
-    
+
     const previewEmptyState = document.getElementById('previewEmptyState');
     if (previewEmptyState) previewEmptyState.classList.remove('hidden');
-    
+
     const drawer = document.getElementById('documentDrawer');
     if (drawer) {
         drawer.classList.remove('w-[400px]', 'lg:w-[500px]', 'xl:w-[600px]');
         drawer.classList.add('w-0');
     }
-    
+
     if (typeof activeChartInstances !== 'undefined') {
         activeChartInstances.forEach(c => c.destroy());
         activeChartInstances = [];
     }
-    
+
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -259,7 +265,22 @@ function renderMessage(role, content, isStreamingNode = false) {
         const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
             try {
-                const parsed = JSON.parse(jsonMatch[1]);
+                // Strip UI injection HTML tags (like highlight spans) from JSON block to preserve valid JSON
+                let cleanJsonStr = jsonMatch[1].replace(/<[^>]+>/g, '');
+                
+                // The AI often drops brackets inside JSON arrays (outputting MONEY_5 instead of [MONEY_5]).
+                // We resolve all mapping tags to pure numbers to ensure JSON is valid and Chart.js can render it.
+                if (typeof currentPiiMapping !== 'undefined' && Object.keys(currentPiiMapping).length > 0) {
+                    for (const [tag, realVal] of Object.entries(currentPiiMapping)) {
+                        const coreId = tag.replace(/\[|\]/g, '');
+                        // Parse numbers natively (removing $ and commas)
+                        const numericVal = parseFloat(realVal.toString().replace(/[^\d.-]/g, '')) || 0;
+                        cleanJsonStr = cleanJsonStr.split(tag).join(numericVal);
+                        cleanJsonStr = cleanJsonStr.split(coreId).join(numericVal);
+                    }
+                }
+                
+                const parsed = JSON.parse(cleanJsonStr);
                 if (parsed.type && parsed.data) {
                     chartData = parsed;
                     mainContent = content.replace(jsonMatch[0], '').trim();
@@ -319,6 +340,44 @@ function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// ─── Client-side PII Highlighter ────────────────────────────────────────────
+// Highlights numbers/financial values in the LLM response with a blue tint.
+// IMPORTANT: must be called on fully-rendered HTML (after marked.parse).
+// Uses an HTML-tag-aware regex so it never touches content inside <...> tags
+// (e.g. Tailwind class names like "bg-blue-500/20" or "text-[0.9em]").
+function clientSidePIIMask(html) {
+    const hl = (val) =>
+        `<span class="pii-highlight" title="Sensitive value detected">${val}</span>`;
+
+    // Match either an HTML tag OR a run of plain text between tags.
+    // We only process the plain-text portions.
+    return html.replace(/(<[^>]+>)|([^<]+)/g, (match, tag, textNode) => {
+        if (tag) return tag;          // HTML tag — leave untouched
+        if (!textNode) return match;  // safety
+
+        let t = textNode;
+
+        // 1. Money  ($1,000 / $26.3 billion / trailing $)
+        t = t.replace(/\$\s?\d+(?:,\d{3})*(?:\.\d+)?(?:\s+(?:million|billion|trillion))?|\d+(?:,\d{3})*(?:\.\d+)?\)?\s*\$/gi,
+            m => hl(m));
+
+        // 2. Percentages  (e.g. 15.3%)
+        t = t.replace(/\d+(?:\.\d+)?\s*%/g,
+            m => hl(m));
+
+        // 3. Dates  (12/04/2024 or Jan 12, 2024)
+        t = t.replace(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}/gi,
+            m => hl(m));
+
+        // 4. Standalone numbers (integers / decimals / k,m,b suffix)
+        t = t.replace(/\b\d+(?:,\d{3})*(?:\.\d+)?(?:[kmb])?\b/gi,
+            m => hl(m));
+
+        return t;
+    });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Chat Submission
 async function handleSend() {
     if (isStreaming) return;
@@ -346,75 +405,89 @@ async function handleSend() {
     try {
         const source = new EventSource(`${API_BASE}/chat/message/stream?session_id=${currentSessionId}&query=${encodeURIComponent(query)}`);
 
-        let piiMapping = {};
+        // Reset global mapping for the new request
+        currentPiiMapping = {};
 
         let auditTurnCount = 0;
+        let lastAuditKey = null;
 
-        source.addEventListener('audit', function(event) {
+        source.addEventListener('audit', function (event) {
             const auditData = JSON.parse(event.data);
-            piiMapping = auditData.mapping || {};
-            
-            if (!auditData.chunks || auditData.chunks.length === 0) return;
-            
+            if (auditData.mapping) {
+                Object.assign(currentPiiMapping, auditData.mapping);
+            }
+
+            const chunkKey = JSON.stringify((auditData.chunks || []).map(c => c.source));
+            if (chunkKey === lastAuditKey) return; // Skip duplicate second SSE from backend
+            lastAuditKey = chunkKey;
+
             auditTurnCount++;
             const container = document.getElementById('auditContainer');
             const emptyState = document.getElementById('auditEmptyState');
             if (emptyState) emptyState.classList.add('hidden');
-            
+
             const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            
+
             let turnHtml = `<div class="mb-4 border border-gray-700/60 rounded-xl overflow-hidden">
                 <div class="bg-gray-800 flex items-center justify-between px-3 py-2 border-b border-gray-700/50">
                     <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
                         <i data-lucide="activity" class="w-3 h-3"></i>
-                        Query ${auditTurnCount} — Context Retrieval
+                        Query ${auditTurnCount} &mdash; Context Retrieval
                     </span>
                     <span class="text-[10px] text-gray-500 font-mono">${now}</span>
                 </div>
                 <div class="p-3 space-y-3">`;
 
-            // Chunks
-            auditData.chunks.forEach((chunk, i) => {
-                turnHtml += `
-                <div class="bg-gray-900/60 rounded-lg border border-gray-700/40">
-                    <div class="flex items-center gap-2 px-3 py-1.5 border-b border-gray-700/40">
-                        <i data-lucide="scan-text" class="w-3 h-3 text-gray-400"></i>
-                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Chunk ${i+1}</span>
-                        <span class="text-[10px] text-blue-400 truncate max-w-[160px] normal-case">${chunk.source}</span>
-                    </div>
-                    <div class="grid grid-cols-2 divide-x divide-gray-700/40">
-                        <div class="p-2">
-                            <div class="text-[9px] text-gray-500 uppercase mb-1 tracking-widest">Extracted</div>
-                            <div class="text-[10px] text-gray-400 overflow-y-auto max-h-24 custom-scrollbar leading-relaxed">${chunk.original.replace(/</g, '&lt;')}</div>
-                        </div>
-                        <div class="p-2 bg-emerald-900/10">
-                            <div class="text-[9px] text-emerald-500/70 uppercase mb-1 tracking-widest">Masked to LLM</div>
-                            <div class="text-[10px] text-emerald-400/80 overflow-y-auto max-h-24 custom-scrollbar leading-relaxed">${chunk.masked.replace(/</g, '&lt;')}</div>
-                        </div>
-                    </div>
+            const chunks = auditData.chunks || [];
+            if (chunks.length === 0) {
+                turnHtml += `<div class="text-[11px] text-gray-500 text-center py-3 border border-dashed border-gray-700 rounded-lg flex items-center justify-center gap-2">
+                    <i data-lucide="file-x" class="w-4 h-4 text-gray-600"></i>
+                    No document context retrieved &mdash; Upload a document to enable RAG
                 </div>`;
-            });
+            } else {
+                // Chunks
+                chunks.forEach((chunk, i) => {
+                    turnHtml += `
+                    <div class="bg-gray-900/60 rounded-lg border border-gray-700/40">
+                        <div class="flex items-center gap-2 px-3 py-1.5 border-b border-gray-700/40">
+                            <i data-lucide="scan-text" class="w-3 h-3 text-gray-400"></i>
+                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Chunk ${i + 1}</span>
+                            <span class="text-[10px] text-blue-400 truncate max-w-[160px] normal-case">${chunk.source}</span>
+                        </div>
+                        <div class="grid grid-cols-2 divide-x divide-gray-700/40">
+                            <div class="p-2">
+                                <div class="text-[9px] text-gray-500 uppercase mb-1 tracking-widest">Extracted</div>
+                                <div class="text-[10px] text-gray-400 overflow-y-auto max-h-24 custom-scrollbar leading-relaxed">${chunk.original.replace(/</g, '&lt;')}</div>
+                            </div>
+                            <div class="p-2 bg-emerald-900/10">
+                                <div class="text-[9px] text-emerald-500/70 uppercase mb-1 tracking-widest">Masked to LLM</div>
+                                <div class="text-[10px] text-emerald-400/80 overflow-y-auto max-h-24 custom-scrollbar leading-relaxed">${chunk.masked.replace(/</g, '&lt;')}</div>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+            }
 
-            // PII Mapping
-            if(Object.keys(piiMapping).length > 0) {
+            // PII Mapping inside Audit
+            if (Object.keys(currentPiiMapping).length > 0) {
                 turnHtml += `
                 <div class="bg-blue-900/10 rounded-lg p-3 border border-blue-900/30">
                     <h4 class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                         <i data-lucide="shield" class="w-3 h-3"></i> Active PII Intercepts
                     </h4>
                     <div class="flex flex-wrap gap-1.5">`;
-                for(const [tag, val] of Object.entries(piiMapping)) {
+                for (const [tag, val] of Object.entries(currentPiiMapping)) {
                     turnHtml += `<div class="text-[10px] bg-blue-900/30 border border-blue-800/50 text-blue-300 px-2 py-1 rounded"><strong class="text-white">${tag}</strong> &rarr; ${val}</div>`;
                 }
                 turnHtml += `</div></div>`;
             }
 
             turnHtml += `</div></div>`;
-            
+
             // Prepend the new turn at the top of the container (most recent first)
             container.insertAdjacentHTML('afterbegin', turnHtml);
             lucide.createIcons({ root: container });
-            
+
             // Flash the audit tab button badge (don't hijack drawer open)
             const auditTabBtn = document.getElementById('tabAudit');
             if (auditTabBtn && !auditTabBtn.classList.contains('text-blue-400')) {
@@ -427,29 +500,75 @@ async function handleSend() {
             }
         });
 
-        source.addEventListener('message', function(event) {
+        source.addEventListener('message', function (event) {
             const dataStr = event.data;
             if (dataStr === '[DONE]') {
                 source.close();
                 isStreaming = false;
-                sendBtn.disabled = false;
-                sendBtn.innerHTML = '<i data-lucide="send" class="w-5 h-5 ml-0.5"></i>';
-                lucide.createIcons();
-                
+                let finalContent = fullContent;
+                // Step 1: restore vault tokens differently inside vs outside JSON blocks
+                const finalParts = finalContent.split(/(```json[\s\S]*?```)/);
+                for (let i = 0; i < finalParts.length; i++) {
+                    if (finalParts[i].startsWith('```json')) {
+                        for (const [tag, realVal] of Object.entries(currentPiiMapping)) {
+                            const coreId = tag.replace(/\[|\]/g, '');
+                            const numericVal = parseFloat(realVal.toString().replace(/[^\d.-]/g, '')) || 0;
+                            finalParts[i] = finalParts[i].split(tag).join(numericVal);
+                            const regex = new RegExp(`\\b${coreId}\\b`, 'g');
+                            finalParts[i] = finalParts[i].replace(regex, numericVal);
+                        }
+                        // Clean any hallucinated unmapped tags inside JSON
+                        finalParts[i] = finalParts[i].replace(/\[(?:MONEY|CARDINAL|PERCENT|DATE|NAME|EMAIL|PHONE)_\d+\]/g, '0');
+                    } else {
+                        for (const [tag, realVal] of Object.entries(currentPiiMapping)) {
+                            finalParts[i] = finalParts[i].split(tag).join(`<span class="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1 rounded text-[0.9em]" title="Securely unmasked by PIIVault natively in browser">${realVal}</span>`);
+                            const coreId = tag.replace(/\[|\]/g, '');
+                            const numericVal = parseFloat(realVal.toString().replace(/[^\d.-]/g, '')) || 0;
+                            const regex = new RegExp(`\\b${coreId}\\b`, 'g');
+                            finalParts[i] = finalParts[i].replace(regex, numericVal);
+                        }
+                        // Clean any hallucinated unmapped tags from normal text
+                        finalParts[i] = finalParts[i].replace(/\[(?:MONEY|CARDINAL|PERCENT|DATE|NAME|EMAIL|PHONE)_\d+\]\s*=\s*/g, '');
+                        finalParts[i] = finalParts[i].replace(/\s*\[(?:MONEY|CARDINAL|PERCENT|DATE|NAME|EMAIL|PHONE)_\d+\]/g, '');
+                    }
+                }
+                finalContent = finalParts.join('');
+
+                // Step 2: render markdown → HTML, THEN apply PII highlight on the HTML
                 chatMessages.removeChild(assistantMsgNode);
-                renderMessage('assistant', fullContent);
+                const doneNode = renderMessage('assistant', finalContent);
+                const doneContent = doneNode.querySelector('.markdown-body');
                 return;
             }
 
             try {
                 const data = JSON.parse(dataStr);
                 if (data.delta) {
-                    let unmaskedDelta = data.delta;
-                    for (const [tag, realVal] of Object.entries(piiMapping)) {
-                        unmaskedDelta = unmaskedDelta.split(tag).join(`<span class="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1 rounded text-[0.9em]" title="Securely unmasked by PIIVault natively in browser">${realVal}</span>`);
+                    fullContent += data.delta;
+                    let displayContent = fullContent;
+                    
+                    const displayParts = displayContent.split(/(```json[\s\S]*?(?:```|$))/);
+                    for (let i = 0; i < displayParts.length; i++) {
+                        if (displayParts[i].startsWith('```json')) {
+                            for (const [tag, realVal] of Object.entries(currentPiiMapping)) {
+                                const coreId = tag.replace(/\[|\]/g, '');
+                                const numericVal = parseFloat(realVal.toString().replace(/[^\d.-]/g, '')) || 0;
+                                displayParts[i] = displayParts[i].split(tag).join(numericVal);
+                                const regex = new RegExp(`\\b${coreId}\\b`, 'g');
+                                displayParts[i] = displayParts[i].replace(regex, numericVal);
+                            }
+                        } else {
+                            for (const [tag, realVal] of Object.entries(currentPiiMapping)) {
+                                displayParts[i] = displayParts[i].split(tag).join(`<span class="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1 rounded text-[0.9em]" title="Securely unmasked by PIIVault natively in browser">${realVal}</span>`);
+                            }
+                            displayParts[i] = displayParts[i].replace(/\[(?:MONEY|CARDINAL|PERCENT|DATE|NAME|EMAIL|PHONE)_\d+\]\s*=\s*/g, '');
+                            displayParts[i] = displayParts[i].replace(/\s*\[(?:MONEY|CARDINAL|PERCENT|DATE|NAME|EMAIL|PHONE)_\d+\]/g, '');
+                        }
                     }
-                    fullContent += unmaskedDelta;
-                    contentNode.innerHTML = marked.parse(fullContent);
+                    displayContent = displayParts.join('');
+                    
+                    // Parse markdown and render immediately
+                    contentNode.innerHTML = marked.parse(displayContent);
                     scrollToBottom();
                 }
             } catch (e) {
@@ -457,14 +576,14 @@ async function handleSend() {
             }
         });
 
-        source.addEventListener('error', function(event) {
+        source.addEventListener('error', function (event) {
             console.error('EventSource failed:', event);
             try {
                 const data = JSON.parse(event.data);
-                if(data && data.detail) {
+                if (data && data.detail) {
                     contentNode.innerHTML += `\n\n<span class="text-red-400 font-bold border border-red-500/50 bg-red-500/10 p-2 rounded">Error: ${data.detail}</span>`;
                 }
-            } catch(e) {
+            } catch (e) {
                 if (!fullContent) {
                     contentNode.innerHTML = `<span class="text-red-400">Stream connection unexpectedly terminated.</span>`;
                 }
@@ -509,7 +628,7 @@ if (openAccountBtn && closeAccountBtn && accountModal) {
             accountModalBody.classList.remove('scale-95');
             accountModalBody.classList.add('scale-100');
         }, 10);
-        
+
         try {
             const res = await fetch(`${API_BASE}/auth/me/${userId}`);
             if (res.ok) {
@@ -537,17 +656,17 @@ if (openAccountBtn && closeAccountBtn && accountModal) {
 }
 
 // File Upload System & Knowledge Base Drawer Openers
-attachBtn.onclick = () => { 
+attachBtn.onclick = () => {
     const drawer = document.getElementById('documentDrawer');
     drawer.classList.remove('w-0');
     drawer.classList.add('w-[400px]', 'lg:w-[500px]', 'xl:w-[600px]');
     switchDrawerTab('files');
-    loadDocuments(); 
+    loadDocuments();
 };
 
 // Activity Log / Workspace Toggle
 const toggleDrawerBtn = document.getElementById('toggleDrawerBtn');
-if(toggleDrawerBtn) {
+if (toggleDrawerBtn) {
     toggleDrawerBtn.onclick = () => {
         const drawer = document.getElementById('documentDrawer');
         if (drawer.classList.contains('w-0')) {
@@ -659,11 +778,11 @@ async function loadDocuments() {
                         <span class="text-sm text-gray-300 truncate group-hover:text-white">${doc.filename}</span>
                     </div>
                     <div class="flex items-center gap-3">
-                        ${doc.report_status === 'COMPLETED' ? 
-                            `<button onclick="event.stopPropagation(); window.openReport(${doc.id}, '${doc.filename}')" class="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded border border-blue-500/30 hover:bg-blue-500/30 transition-colors flex items-center gap-1"><i data-lucide="file-search" class="w-3 h-3"></i> Report</button>
+                        ${doc.report_status === 'COMPLETED' ?
+                        `<button onclick="event.stopPropagation(); window.openReport(${doc.id}, '${doc.filename}')" class="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded border border-blue-500/30 hover:bg-blue-500/30 transition-colors flex items-center gap-1"><i data-lucide="file-search" class="w-3 h-3"></i> Report</button>
                              <button onclick="event.stopPropagation(); window.openVisualizations(${doc.id})" class="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs rounded border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors flex items-center gap-1"><i data-lucide="bar-chart-2" class="w-3 h-3"></i> Visualize</button>`
-                            : (doc.report_status === 'FAILED' ? `<span class="px-2 py-1 bg-red-500/10 text-red-400 text-xs rounded flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Failed</span>` : (doc.report_status === 'READY' ? `` : `<span class="px-2 py-1 bg-amber-500/10 text-amber-400 text-xs rounded border border-amber-500/20 flex items-center gap-1"><i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Generating...</span>`))
-                        }
+                        : (doc.report_status === 'FAILED' ? `<span class="px-2 py-1 bg-red-500/10 text-red-400 text-xs rounded flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Failed</span>` : (doc.report_status === 'READY' ? `` : `<span class="px-2 py-1 bg-amber-500/10 text-amber-400 text-xs rounded border border-amber-500/20 flex items-center gap-1"><i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Generating...</span>`))
+                    }
                         <span class="text-xs text-gray-500 shrink-0 hidden sm:block">${new Date(doc.uploaded_at).toLocaleDateString()}</span>
                     </div>
                 `;
@@ -677,7 +796,7 @@ async function loadDocuments() {
 }
 
 // Open the AI-generated JSON report as rich HTML in the Report tab
-window.openReport = async function(docId, filename) {
+window.openReport = async function (docId, filename) {
     const drawer = document.getElementById('documentDrawer');
     if (drawer.classList.contains('w-0')) {
         drawer.classList.remove('w-0');
@@ -708,7 +827,7 @@ window.openReport = async function(docId, filename) {
         const data = await res.json();
         const rj = typeof data.report_json === 'string' ? JSON.parse(data.report_json) : data.report_json;
         renderReportHTML(rj, renderer, filename);
-    } catch(e) {
+    } catch (e) {
         renderer.innerHTML = `<div class="p-6 text-center text-red-400 opacity-70"><p class="text-sm">Error loading report: ${e.message}</p></div>`;
     }
 };
@@ -821,11 +940,11 @@ document.getElementById('closeDrawerBtn').onclick = () => {
 // AI Visualization Framework
 let activeChartInstances = [];
 
-window.openVisualizations = async function(docId) {
+window.openVisualizations = async function (docId) {
     const drawer = document.getElementById('documentDrawer');
     const vizContainer = document.getElementById('vizContainer');
     const vizEmptyState = document.getElementById('vizEmptyState');
-    
+
     if (drawer.classList.contains('w-0')) {
         drawer.classList.remove('w-0');
         drawer.classList.add('w-[400px]', 'lg:w-[500px]', 'xl:w-[600px]');
@@ -836,7 +955,7 @@ window.openVisualizations = async function(docId) {
     vizEmptyState.classList.remove('hidden');
     vizEmptyState.innerHTML = '<i data-lucide="loader-2" class="w-12 h-12 text-blue-400 mx-auto mb-3 animate-spin"></i><p class="text-sm text-gray-400">Booting Analytics Engine...</p>';
     vizContainer.classList.add('hidden');
-    
+
     // Clear old charts
     activeChartInstances.forEach(c => c.destroy());
     activeChartInstances = [];
@@ -845,16 +964,16 @@ window.openVisualizations = async function(docId) {
 
     try {
         const res = await fetch(`${API_BASE}/documents/report/${docId}`);
-        if(res.ok) {
+        if (res.ok) {
             const data = await res.json();
-            if(data.status === 'COMPLETED') {
+            if (data.status === 'COMPLETED') {
                 renderVisualizations(data.report_json);
             } else {
                 vizEmptyState.innerHTML = '<i data-lucide="alert-circle" class="w-12 h-12 text-red-400 mx-auto mb-3"></i><p class="text-sm text-red-400">Data not ready. Still processing in backend.</p>';
                 lucide.createIcons();
             }
         }
-    } catch(e) {
+    } catch (e) {
         vizEmptyState.innerHTML = '<i data-lucide="wifi-off" class="w-12 h-12 text-red-400 mx-auto mb-3"></i><p class="text-sm text-red-400">Connection error fetching analytics.</p>';
         lucide.createIcons();
     }
@@ -869,12 +988,12 @@ function renderVisualizations(jsonSchema) {
 
     const vizEmptyState = document.getElementById('vizEmptyState');
     const vizContainer = document.getElementById('vizContainer');
-    
+
     vizEmptyState.classList.add('hidden');
     vizContainer.classList.remove('hidden');
 
     // Inject KPIs first
-    if(jsonSchema.kpis && jsonSchema.kpis.length > 0) {
+    if (jsonSchema.kpis && jsonSchema.kpis.length > 0) {
         let kpiHtml = `<div class="grid grid-cols-2 gap-4 mb-6">`;
         jsonSchema.kpis.forEach(kpi => {
             let trendIcon = kpi.trend.toLowerCase().includes('up') ? '<i data-lucide="trending-up" class="w-4 h-4 text-emerald-400"></i>' : (kpi.trend.toLowerCase().includes('down') ? '<i data-lucide="trending-down" class="w-4 h-4 text-red-400"></i>' : '<i data-lucide="minus" class="w-4 h-4 text-gray-400"></i>');
@@ -893,7 +1012,7 @@ function renderVisualizations(jsonSchema) {
     }
 
     // Inject Executive Insight 
-    if(jsonSchema.executive_summary) {
+    if (jsonSchema.executive_summary) {
         vizContainer.innerHTML += `
             <div class="bg-blue-500/10 border border-blue-500/20 rounded-xl p-5 mb-6">
                 <h4 class="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="lightbulb" class="w-4 h-4"></i> Executive Vector</h4>
@@ -903,7 +1022,7 @@ function renderVisualizations(jsonSchema) {
     }
 
     // Charting
-    if(jsonSchema.charts && jsonSchema.charts.length > 0) {
+    if (jsonSchema.charts && jsonSchema.charts.length > 0) {
         const chartConfigsToRender = [];
         jsonSchema.charts.forEach((chartData, idx) => {
             const canvasId = `aiChart_${idx}`;
@@ -922,19 +1041,19 @@ function renderVisualizations(jsonSchema) {
             chartConfigsToRender.forEach(instance => {
                 const chartData = instance.config;
                 const isRadial = ['pie', 'doughnut', 'radar'].includes(chartData.type);
-                
-                const backgroundColors = isRadial 
-                    ? ['rgba(239, 68, 68, 0.8)', 'rgba(245, 158, 11, 0.8)', 'rgba(16, 185, 129, 0.8)', 'rgba(59, 130, 246, 0.8)', 'rgba(139, 92, 246, 0.8)'] 
+
+                const backgroundColors = isRadial
+                    ? ['rgba(239, 68, 68, 0.8)', 'rgba(245, 158, 11, 0.8)', 'rgba(16, 185, 129, 0.8)', 'rgba(59, 130, 246, 0.8)', 'rgba(139, 92, 246, 0.8)']
                     : 'rgba(16, 185, 129, 0.5)';
-                    
+
                 const chartOptions = {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { display: isRadial, position: 'bottom', labels: { color: '#cbd5e1', font: {size: 11} } }
+                    plugins: {
+                        legend: { display: isRadial, position: 'bottom', labels: { color: '#cbd5e1', font: { size: 11 } } }
                     }
                 };
-                
+
                 if (!isRadial) {
                     chartOptions.scales = {
                         y: { display: true, beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
@@ -968,19 +1087,19 @@ function renderVisualizations(jsonSchema) {
     }
 }
 
-window.switchDrawerTab = function(tab) {
+window.switchDrawerTab = function (tab) {
     const tabMap = {
-        'files':          { btnId: 'tabFiles',          contentId: 'filesContent' },
-        'preview':        { btnId: 'tabPreview',        contentId: 'previewContent' },
+        'files': { btnId: 'tabFiles', contentId: 'filesContent' },
+        'preview': { btnId: 'tabPreview', contentId: 'previewContent' },
         'visualizations': { btnId: 'tabVisualizations', contentId: 'visualizationsContent' },
-        'audit':          { btnId: 'tabAudit',          contentId: 'auditContent' }
+        'audit': { btnId: 'tabAudit', contentId: 'auditContent' }
     };
-    
+
     Object.entries(tabMap).forEach(([t, ids]) => {
         const btn = document.getElementById(ids.btnId);
         const content = document.getElementById(ids.contentId);
         if (!btn || !content) return;
-        
+
         if (t === tab) {
             btn.classList.remove('text-gray-500', 'font-medium', 'border-transparent');
             btn.classList.add('text-blue-400', 'font-bold', 'border-blue-400');
